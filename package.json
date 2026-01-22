@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "description": "AI-powered subscription service application",
   "main": "index.js",
-  "homepage": "https://yamadashamoji.github.io/shopping_sample/",
+  "homepage": "https://yamadashamoji.github.io/",
   "scripts": {
     "start": "node server/server.js",
     "dev": "nodemon server/server.js",
