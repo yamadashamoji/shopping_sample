@@ -25,17 +25,11 @@ const OmakaseApp = () => {
   }, [token]);
 
   const fetchSubscriptions = async () => {
-    try {
-      const response = await fetch('http://localhost:5000/api/subscriptions', {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (response.ok) {
-        const data = await response.json();
-        setSubscriptions(data.subscriptions || []);
-      }
-    } catch (err) {
-      console.error('Error:', err);
-    }
+    // デモ用：モックデータ
+    setSubscriptions([
+      { id: 1, category_name: 'コーヒー豆', plan: 'basic', next_delivery_date: '2026-02-18', status: 'active' },
+      { id: 2, category_name: '靴下', plan: 'premium', next_delivery_date: '2026-02-05', status: 'active' },
+    ]);
   };
 
   const handleLogin = async (e) => {
@@ -43,21 +37,13 @@ const OmakaseApp = () => {
     setLoading(true);
     setError(null);
     try {
-      const response = await fetch('http://localhost:5000/api/users/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(loginData)
-      });
-      if (response.ok) {
-        const data = await response.json();
-        setToken(data.token);
-        localStorage.setItem('token', data.token);
-        setLoginData({ email: '', password: '' });
-        setCurrentPage('home');
-      } else {
-        const data = await response.json();
-        setError(data.error || 'ログインに失敗しました');
-      }
+      // デモ用：ダミーJWTトークン生成
+      const dummyToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJlbWFpbCI6IiIgICsgbG9naW5EYXRhLmVtYWlsICsgIiIsImlkIjoxfQ.demo';
+      setToken(dummyToken);
+      localStorage.setItem('token', dummyToken);
+      setLoginData({ email: '', password: '' });
+      setCurrentPage('home');
+      fetchSubscriptions();
     } catch (err) {
       setError('エラー: ' + err.message);
     } finally {
@@ -70,19 +56,10 @@ const OmakaseApp = () => {
     setLoading(true);
     setError(null);
     try {
-      const response = await fetch('http://localhost:5000/api/users/register', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(registerData)
-      });
-      if (response.ok) {
-        setRegisterData({ username: '', email: '', password: '' });
-        setCurrentPage('login');
-        alert('登録が完了しました。ログインしてください。');
-      } else {
-        const data = await response.json();
-        setError(data.error || '登録に失敗しました');
-      }
+      // デモ用：登録成功
+      setRegisterData({ username: '', email: '', password: '' });
+      setCurrentPage('login');
+      alert('登録が完了しました。ログインしてください。');
     } catch (err) {
       setError('エラー: ' + err.message);
     } finally {
