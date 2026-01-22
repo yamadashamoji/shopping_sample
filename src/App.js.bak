@@ -1,0 +1,1164 @@
+import React, { useState, useEffect } from 'react';
+import './styles/main.css';
+
+const OmakaseApp = () => {
+  const [currentPage, setCurrentPage] = useState('home');
+  const [user, setUser] = useState(null);
+  const [token, setToken] = useState(localStorage.getItem('token'));
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+
+  const [loginData, setLoginData] = useState({ email: '', password: '' });
+  const [registerData, setRegisterData] = useState({ username: '', email: '', password: '' });
+  const [subscriptions, setSubscriptions] = useState([]);
+
+  useEffect(() => {
+    if (token) {
+      try {
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        setUser(payload);
+        fetchSubscriptions();
+      } catch (err) {
+        console.error('Token error:', err);
+        setToken(null);
+      }
+    }
+  }, [token]);
+
+  const apiCall = async (endpoint, method = 'GET', body = null) => {
+    try {
+      const headers = { 'Content-Type': 'application/json' };
+      if (token) {
+        headers.Authorization = `Bearer ${token}`;
+      }
+
+      const options = { method, headers };
+      if (body) options.body = JSON.stringify(body);
+
+      const response = await fetch(`http://localhost:5000${endpoint}`, options);
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'APIエラーが発生しました');
+      }
+
+      return await response.json();
+    } catch (err) {
+      setError(err.message);
+      console.error('APIエラー:', err);
+      throw err;
+    }
+  };
+
+  const handleLogin = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await apiCall('/api/users/login', 'POST', loginData);
+      setToken(response.token);
+      localStorage.setItem('token', response.token);
+      setLoginData({ email: '', password: '' });
+      setCurrentPage('home');
+    } catch (err) {
+      // エラーはsetErrorで処理済み
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleRegister = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    setError(null);
+    try {
+      await apiCall('/api/users/register', 'POST', registerData);
+      setRegisterData({ username: '', email: '', password: '' });
+      setCurrentPage('login');
+      setError('登録が完了しました。ログインしてください。');
+    } catch (err) {
+      // エラーはsetErrorで処理済み
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleLogout = () => {
+    setToken(null);
+    setUser(null);
+    localStorage.removeItem('token');
+    setCurrentPage('home');
+  };
+
+  const fetchSubscriptions = async () => {
+    try {
+      const response = await fetch('http://localhost:5000/api/subscriptions', {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setSubscriptions(data.subscriptions || []);
+      }
+    } catch (err) {
+      console.error('サブスク取得エラー:', err);
+    }
+  };
+
+  // ========== レンダリング ==========
+  if (!token) {
+    if (currentPage === 'register') {
+      return (
+        <div style={styles.authContainer}>
+          <div style={styles.authCard}>
+            <h2>新規会員登録</h2>
+            {error && <div style={styles.errorAlert}>⚠️ {error}</div>}
+            <form onSubmit={handleRegister}>
+              <input
+                type="text"
+                placeholder="ユーザー名"
+                value={registerData.username}
+                onChange={(e) => setRegisterData({ ...registerData, username: e.target.value })}
+                required
+                style={styles.input}
+              />
+              <input
+                type="email"
+                placeholder="メールアドレス"
+                value={registerData.email}
+                onChange={(e) => setRegisterData({ ...registerData, email: e.target.value })}
+                required
+                style={styles.input}
+              />
+              <input
+                type="password"
+                placeholder="パスワード"
+                value={registerData.password}
+                onChange={(e) => setRegisterData({ ...registerData, password: e.target.value })}
+                required
+                style={styles.input}
+              />
+              <button type="submit" disabled={loading} style={styles.button}>
+                {loading ? '⏳ 登録中...' : '登録'}
+              </button>
+            </form>
+            <p>
+              既にアカウントをお持ちですか？
+              <button onClick={() => setCurrentPage('login')} style={styles.link}>ログイン</button>
+            </p>
+          </div>
+        </div>
+      );
+    }
+
+    if (currentPage === 'login') {
+      return (
+        <div style={styles.authContainer}>
+          <div style={styles.authCard}>
+            <h2>ログイン</h2>
+            {error && <div style={styles.errorAlert}>⚠️ {error}</div>}
+            <form onSubmit={handleLogin}>
+              <input
+                type="email"
+                placeholder="メールアドレス"
+                value={loginData.email}
+                onChange={(e) => setLoginData({ ...loginData, email: e.target.value })}
+                required
+                style={styles.input}
+              />
+              <input
+                type="password"
+                placeholder="パスワード"
+                value={loginData.password}
+                onChange={(e) => setLoginData({ ...loginData, password: e.target.value })}
+                required
+                style={styles.input}
+              />
+              <button type="submit" disabled={loading} style={styles.button}>
+                {loading ? '⏳ ログイン中...' : 'ログイン'}
+              </button>
+            </form>
+            <p>
+              アカウントをお持ちでない方？
+              <button onClick={() => setCurrentPage('register')} style={styles.link}>登録</button>
+            </p>
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div style={styles.appContainer}>
+        <header style={styles.header}>
+          <h1>🎁 おまかせ定期便</h1>
+          <p>あなたの好みを分析して、毎月おすすめをお届けします</p>
+        </header>
+
+        <main style={styles.main}>
+          <section style={styles.features}>
+            <div style={styles.featureCard}>
+              <div style={styles.featureIcon}>☕</div>
+              <h3>多様なカテゴリ</h3>
+              <p>コーヒー豆、紅茶、スイーツ、本から選択</p>
+            </div>
+            <div style={styles.featureCard}>
+              <div style={styles.featureIcon}>⭐</div>
+              <h3>AI診断クイズ</h3>
+              <p>あなたの好みを詳細に分析し、最適な商品をおすすめ</p>
+            </div>
+            <div style={styles.featureCard}>
+              <div style={styles.featureIcon}>📅</div>
+              <h3>定期配送</h3>
+              <p>月1回、2週間に1回、週1回から選べる配送頻度</p>
+            </div>
+            <div style={styles.featureCard}>
+              <div style={styles.featureIcon}>📦</div>
+              <h3>スケジュール管理</h3>
+              <p>次回配送日をいつでも確認・管理できます</p>
+            </div>
+          </section>
+
+          <div style={styles.ctaButtons}>
+            <button onClick={() => setCurrentPage('login')} style={styles.buttonPrimary}>ログイン</button>
+            <button onClick={() => setCurrentPage('register')} style={styles.buttonSecondary}>新規登録</button>
+          </div>
+        </main>
+      </div>
+    );
+  }
+
+  // ========== ログイン後 ==========
+  return (
+    <div style={styles.appContainer}>
+      <header style={{...styles.header, ...styles.dashboardHeader}}>
+        <h1>🎁 おまかせ定期便</h1>
+        <div style={styles.headerNav}>
+          <button onClick={() => setCurrentPage('home')} style={{...styles.navButton, ...(currentPage === 'home' ? styles.navButtonActive : {})}}>
+            🏠
+          </button>
+          <button onClick={() => setCurrentPage('subscriptions')} style={{...styles.navButton, ...(currentPage === 'subscriptions' ? styles.navButtonActive : {})}}>
+            📅
+          </button>
+          <button onClick={handleLogout} style={styles.navButton}>
+            🚪
+          </button>
+        </div>
+      </header>
+
+      {error && <div style={styles.errorAlert}>⚠️ {error}</div>}
+
+      <main style={styles.main}>
+        {currentPage === 'home' && (
+          <div>
+            <h2>ようこそ！{user?.email || 'ユーザー'}</h2>
+
+            {subscriptions.length === 0 ? (
+              <div style={styles.emptyState}>
+                <div style={{fontSize: '60px'}}>📦</div>
+                <h3>サブスクリプションがまだありません</h3>
+                <p>まずは診断クイズに参加して、あなたの好みを教えてください！</p>
+              </div>
+            ) : (
+              <section>
+                <h3>あなたのサブスクリプション</h3>
+                {subscriptions.map((sub) => (
+                  <div key={sub.id} style={styles.subscriptionCard}>
+                    <h4>{sub.category_name}</h4>
+                    <p>プラン: {sub.plan}</p>
+                    <p>次回配送: {new Date(sub.next_delivery_date).toLocaleDateString('ja-JP')}</p>
+                    <p>ステータス: {sub.status}</p>
+                  </div>
+                ))}
+              </section>
+            )}
+          </div>
+        )}
+
+        {currentPage === 'subscriptions' && (
+          <div>
+            <h2>📋 サブスクリプション管理</h2>
+            {subscriptions.length === 0 ? (
+              <div style={styles.emptyState}>
+                <div style={{fontSize: '60px'}}>📅</div>
+                <h3>サブスクリプションがありません</h3>
+              </div>
+            ) : (
+              <div>
+                {subscriptions.map((sub) => (
+                  <div key={sub.id} style={styles.subscriptionDetail}>
+                    <h3>{sub.category_name}</h3>
+                    <p><strong>プラン:</strong> {sub.plan}</p>
+                    <p><strong>次回配送:</strong> {new Date(sub.next_delivery_date).toLocaleDateString('ja-JP')}</p>
+                    <p><strong>ステータス:</strong> {sub.status}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </main>
+    </div>
+  );
+};
+
+const styles = {
+  appContainer: {
+    minHeight: '100vh',
+    background: 'linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%)',
+    fontFamily: 'Segoe UI, Tahoma, Geneva, Verdana, sans-serif',
+  },
+  header: {
+    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+    color: 'white',
+    padding: '40px 20px',
+    textAlign: 'center',
+    boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+  },
+  dashboardHeader: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  headerNav: {
+    display: 'flex',
+    gap: '10px',
+  },
+  navButton: {
+    fontSize: '24px',
+    background: 'rgba(255,255,255,0.2)',
+    border: 'none',
+    padding: '8px 12px',
+    borderRadius: '4px',
+    cursor: 'pointer',
+    transition: 'background 0.3s',
+  },
+  navButtonActive: {
+    background: 'rgba(255,255,255,0.4)',
+  },
+  main: {
+    maxWidth: '1000px',
+    margin: '40px auto',
+    padding: '0 20px',
+  },
+  features: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))',
+    gap: '20px',
+    marginBottom: '40px',
+  },
+  featureCard: {
+    background: 'white',
+    padding: '30px',
+    borderRadius: '8px',
+    boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+    textAlign: 'center',
+  },
+  featureIcon: {
+    fontSize: '40px',
+    marginBottom: '10px',
+  },
+  ctaButtons: {
+    display: 'flex',
+    gap: '15px',
+    justifyContent: 'center',
+  },
+  buttonPrimary: {
+    background: '#667eea',
+    color: 'white',
+    padding: '12px 40px',
+    border: 'none',
+    borderRadius: '4px',
+    cursor: 'pointer',
+    fontSize: '16px',
+    fontWeight: '500',
+  },
+  buttonSecondary: {
+    background: 'white',
+    color: '#667eea',
+    padding: '12px 40px',
+    border: '2px solid #667eea',
+    borderRadius: '4px',
+    cursor: 'pointer',
+    fontSize: '16px',
+    fontWeight: '500',
+  },
+  authContainer: {
+    minHeight: '100vh',
+    display: 'flex',
+    justifyContent: 'center',
+    alignItems: 'center',
+    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+  },
+  authCard: {
+    background: 'white',
+    padding: '40px',
+    borderRadius: '8px',
+    boxShadow: '0 8px 32px rgba(0,0,0,0.2)',
+    width: '100%',
+    maxWidth: '400px',
+  },
+  input: {
+    width: '100%',
+    padding: '10px 15px',
+    marginBottom: '15px',
+    border: '1px solid #ddd',
+    borderRadius: '4px',
+    fontSize: '14px',
+    boxSizing: 'border-box',
+  },
+  button: {
+    width: '100%',
+    padding: '10px 15px',
+    background: '#667eea',
+    color: 'white',
+    border: 'none',
+    borderRadius: '4px',
+    cursor: 'pointer',
+    fontSize: '14px',
+    fontWeight: '500',
+  },
+  link: {
+    background: 'none',
+    border: 'none',
+    color: '#667eea',
+    cursor: 'pointer',
+    marginLeft: '5px',
+    textDecoration: 'underline',
+  },
+  errorAlert: {
+    background: '#fee',
+    border: '1px solid #fcc',
+    padding: '15px 20px',
+    borderRadius: '4px',
+    color: '#c00',
+    margin: '20px auto',
+    maxWidth: '1000px',
+  },
+  emptyState: {
+    textAlign: 'center',
+    padding: '60px 20px',
+  },
+  subscriptionCard: {
+    background: 'white',
+    padding: '20px',
+    borderRadius: '8px',
+    marginBottom: '15px',
+    boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+  },
+  subscriptionDetail: {
+    background: 'white',
+    padding: '20px',
+    borderRadius: '8px',
+    marginBottom: '15px',
+    boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+  },
+};
+
+export default OmakaseApp;
+  // ============ State Management ============
+  const [currentPage, setCurrentPage] = useState('home');
+  const [user, setUser] = useState(null);
+  const [token, setToken] = useState(localStorage.getItem('token'));
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+
+  // ユーザー情報フォーム
+  const [loginData, setLoginData] = useState({ email: '', password: '' });
+  const [registerData, setRegisterData] = useState({ username: '', email: '', password: '' });
+
+  // カテゴリ選択
+  const [categories, setCategories] = useState([]);
+  const [selectedCategory, setSelectedCategory] = useState(null);
+
+  // 診断クイズ
+  const [currentQuestion, setCurrentQuestion] = useState(0);
+  const [quizAnswers, setQuizAnswers] = useState({});
+  const [diagnosticResult, setDiagnosticResult] = useState(null);
+
+  // サブスクリプション
+  const [subscriptions, setSubscriptions] = useState([]);
+  const [selectedPlan, setSelectedPlan] = useState('basic');
+
+  // 推奨商品
+  const [recommendations, setRecommendations] = useState([]);
+
+  // ============ カテゴリ別診断クイズ定義 ============
+  const getQuizByCategory = (categoryId) => {
+    const quizzes = {
+      1: [ // コーヒー豆
+        {
+          id: 'roast',
+          question: 'どの焙煎度がお好みですか？',
+          options: [
+            { value: 'light', label: '浅煎り', desc: 'フルーティーで酸味が特徴' },
+            { value: 'medium', label: '中煎り', desc: 'バランスの取れた味わい' },
+            { value: 'dark', label: '深煎り', desc: '濃厚でコクのある味' }
+          ]
+        },
+        {
+          id: 'flavor',
+          question: '好きな風味は？',
+          options: [
+            { value: 'fruity', label: 'フルーティー', desc: 'ベリーや柑橘系の香り' },
+            { value: 'nutty', label: 'ナッツ系', desc: 'アーモンドやヘーゼルナッツ' },
+            { value: 'chocolate', label: 'チョコレート', desc: 'カカオやキャラメル' }
+          ]
+        },
+        {
+          id: 'strength',
+          question: 'コーヒーの濃さは？',
+          options: [
+            { value: 'mild', label: 'マイルド', desc: '優しい飲み口' },
+            { value: 'medium', label: '普通', desc: 'ちょうど良い濃さ' },
+            { value: 'strong', label: '濃いめ', desc: 'しっかりとした味わい' }
+          ]
+        },
+        {
+          id: 'frequency',
+          question: '1ヶ月でどのくらい飲みますか？',
+          options: [
+            { value: 'light', label: '週2-3杯', desc: '200g/月（約10杯分）' },
+            { value: 'regular', label: '毎日1杯', desc: '500g/月（約25杯分）' },
+            { value: 'heavy', label: '毎日2-3杯', desc: '1kg/月（約50杯分）' }
+          ]
+        }
+      ],
+      2: [ // 靴下
+        {
+          id: 'material',
+          question: '好みの素材は？',
+          options: [
+            { value: 'cotton', label: '綿', desc: '通気性が良く爽やか' },
+            { value: 'wool', label: 'ウール', desc: '保温性が高く暖かい' },
+            { value: 'blend', label: 'ブレンド', desc: 'バランスの取れた素材' }
+          ]
+        },
+        {
+          id: 'season',
+          question: 'どの季節用ですか？',
+          options: [
+            { value: 'summer', label: '夏用', desc: '蒸れにくく快適' },
+            { value: 'spring_fall', label: '春・秋用', desc: '定番・オールシーズン' },
+            { value: 'winter', label: '冬用', desc: '厚手・保温性重視' }
+          ]
+        },
+        {
+          id: 'thickness',
+          question: '厚さの好みは？',
+          options: [
+            { value: 'thin', label: '薄手', desc: 'フィット感重視' },
+            { value: 'medium', label: '中厚', desc: 'バランス型' },
+            { value: 'thick', label: '厚手', desc: '履き心地・温かさ重視' }
+          ]
+        }
+      ],
+      3: [ // スキンケア
+        {
+          id: 'skinType',
+          question: 'あなたの肌タイプは？',
+          options: [
+            { value: 'oily', label: 'オイリー肌', desc: '皮脂が多め、テカりやすい' },
+            { value: 'dry', label: '乾燥肌', desc: 'つっぱり感、粉吹きがある' },
+            { value: 'combination', label: 'コンビネーション肌', desc: 'Tゾーンは脂っぽく、頬は乾燥' }
+          ]
+        },
+        {
+          id: 'concern',
+          question: '主な肌の悩みは？',
+          options: [
+            { value: 'acne', label: 'ニキビ・肌荒れ', desc: '吹き出物が多い' },
+            { value: 'aging', label: 'エイジングケア', desc: 'シワ・たるみ・くすみ' },
+            { value: 'sensitivity', label: '敏感肌', desc: 'かゆみ・赤み・刺激に弱い' }
+          ]
+        },
+        {
+          id: 'priority',
+          question: 'スキンケアで最も優先したいことは？',
+          options: [
+            { value: 'moisture', label: '保湿', desc: 'しっとりした肌へ' },
+            { value: 'cleanliness', label: '清潔感', desc: 'クリアで透明感のある肌' },
+            { value: 'whitening', label: 'ホワイトニング', desc: '美白・透明度UP' }
+          ]
+        }
+      ]
+    };
+
+    return quizzes[categoryId] || quizzes[1];
+  };
+
+  // ============ APIコール関数 ============
+  const apiCall = async (endpoint, method = 'GET', body = null) => {
+    try {
+      const headers = { 'Content-Type': 'application/json' };
+      if (token) {
+        headers.Authorization = `Bearer ${token}`;
+      }
+
+      const options = { method, headers };
+      if (body) options.body = JSON.stringify(body);
+
+      const response = await fetch(`http://localhost:5000${endpoint}`, options);
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'APIエラーが発生しました');
+      }
+
+      return await response.json();
+    } catch (err) {
+      setError(err.message);
+      console.error('APIエラー:', err);
+      throw err;
+    }
+  };
+
+  // ============ 初期化・ユーザー関連 ============
+  useEffect(() => {
+    if (token) {
+      // トークンからユーザーIDを取得（JWTデコード）
+      const payload = JSON.parse(atob(token.split('.')[1]));
+      setUser(payload);
+    }
+  }, [token]);
+
+  const handleLogin = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await apiCall('/api/users/login', 'POST', loginData);
+      setToken(response.token);
+      localStorage.setItem('token', response.token);
+      setLoginData({ email: '', password: '' });
+      setCurrentPage('home');
+    } catch (err) {
+      // エラーは既にsetErrorで処理済み
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleRegister = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    setError(null);
+    try {
+      await apiCall('/api/users/register', 'POST', registerData);
+      setRegisterData({ username: '', email: '', password: '' });
+      setCurrentPage('login');
+      setError('登録が完了しました。ログインしてください。');
+    } catch (err) {
+      // エラーは既にsetErrorで処理済み
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleLogout = () => {
+    setToken(null);
+    setUser(null);
+    localStorage.removeItem('token');
+    setCurrentPage('home');
+  };
+
+  // ============ カテゴリ取得 ============
+  useEffect(() => {
+    const fetchCategories = async () => {
+      try {
+        const data = await apiCall('/api/categories');
+        setCategories(data);
+      } catch (err) {
+        console.error('カテゴリ取得エラー:', err);
+      }
+    };
+    fetchCategories();
+  }, []);
+
+  // ============ サブスクリプション取得 ============
+  useEffect(() => {
+    if (user) {
+      const fetchSubscriptions = async () => {
+        try {
+          const data = await apiCall(`/api/subscriptions/${user.id}`);
+          setSubscriptions(data);
+        } catch (err) {
+          console.error('サブスク取得エラー:', err);
+        }
+      };
+      fetchSubscriptions();
+    }
+  }, [user]);
+
+  // ============ 診断クイズ ============
+  const handleAnswerQuestion = (answer) => {
+    const currentQ = getQuizByCategory(selectedCategory)[currentQuestion];
+    setQuizAnswers({
+      ...quizAnswers,
+      [currentQ.id]: answer
+    });
+
+    if (currentQuestion < getQuizByCategory(selectedCategory).length - 1) {
+      setCurrentQuestion(currentQuestion + 1);
+    } else {
+      // クイズ完了 → 診断結果生成
+      generateDiagnosticResult();
+    }
+  };
+
+  const generateDiagnosticResult = async () => {
+    try {
+      const preferences = Object.assign({}, quizAnswers);
+      const score = Object.keys(quizAnswers).length * 25; // 簡易スコア
+
+      await apiCall('/api/diagnostic-results', 'POST', {
+        categoryId: selectedCategory,
+        answers: quizAnswers,
+        preferences,
+        score
+      });
+
+      // 推奨商品を生成
+      await apiCall(`/api/recommendations/${user.id}/generate`, 'POST', {
+        categoryId: selectedCategory
+      });
+
+      // 推奨商品を取得
+      const recs = await apiCall(`/api/recommendations/${user.id}`);
+      setRecommendations(recs);
+
+      setDiagnosticResult({
+        preferences,
+        score,
+        timestamp: new Date().toLocaleDateString('ja-JP')
+      });
+
+      setCurrentQuestion(0);
+      setQuizAnswers({});
+    } catch (err) {
+      console.error('診断生成エラー:', err);
+    }
+  };
+
+  // ============ サブスクリプション作成 ============
+  const handleCreateSubscription = async () => {
+    try {
+      const frequencyMap = { basic: 30, premium: 14, deluxe: 7 };
+      
+      await apiCall('/api/subscriptions', 'POST', {
+        categoryId: selectedCategory,
+        plan: selectedPlan,
+        frequency: frequencyMap[selectedPlan]
+      });
+
+      // サブスク再取得
+      const updated = await apiCall(`/api/subscriptions/${user.id}`);
+      setSubscriptions(updated);
+
+      setCurrentPage('subscriptions');
+      setError('');
+    } catch (err) {
+      console.error('サブスク作成エラー:', err);
+    }
+  };
+
+  // ============ 次回配送日計算 ============
+  const calculateNextDelivery = (subscription) => {
+    const nextDate = new Date(subscription.next_delivery_date);
+    const today = new Date();
+    const daysUntil = Math.ceil((nextDate - today) / (1000 * 60 * 60 * 24));
+    return daysUntil > 0 ? `${daysUntil}日後` : '本日・明日';
+  };
+
+  // ============ UI Components ============
+  const ErrorAlert = () =>
+    error && (
+      <div className="error-alert">
+        ⚠️
+        <span>{error}</span>
+        <button onClick={() => setError(null)}>✕</button>
+      </div>
+    );
+
+  // ============ ページレンダリング ============
+  if (!token) {
+    // ログイン前画面
+    if (currentPage === 'register') {
+      return (
+        <div className="auth-container">
+          <div className="auth-card">
+            <h2>新規会員登録</h2>
+            <ErrorAlert />
+            <form onSubmit={handleRegister}>
+              <input
+                type="text"
+                placeholder="ユーザー名"
+                value={registerData.username}
+                onChange={(e) => setRegisterData({ ...registerData, username: e.target.value })}
+                required
+              />
+              <input
+                type="email"
+                placeholder="メールアドレス"
+                value={registerData.email}
+                onChange={(e) => setRegisterData({ ...registerData, email: e.target.value })}
+                required
+              />
+              <input
+                type="password"
+                placeholder="パスワード"
+                value={registerData.password}
+                onChange={(e) => setRegisterData({ ...registerData, password: e.target.value })}
+                required
+              />
+              <button type="submit" disabled={loading}>
+                {loading ? ⏳ : '登録'}
+              </button>
+            </form>
+            <p className="auth-switch">
+              既にアカウントをお持ちですか？
+              <button onClick={() => setCurrentPage('login')} className="link-button">ログイン</button>
+            </p>
+          </div>
+        </div>
+      );
+    }
+
+    if (currentPage === 'login') {
+      return (
+        <div className="auth-container">
+          <div className="auth-card">
+            <h2>ログイン</h2>
+            <ErrorAlert />
+            <form onSubmit={handleLogin}>
+              <input
+                type="email"
+                placeholder="メールアドレス"
+                value={loginData.email}
+                onChange={(e) => setLoginData({ ...loginData, email: e.target.value })}
+                required
+              />
+              <input
+                type="password"
+                placeholder="パスワード"
+                value={loginData.password}
+                onChange={(e) => setLoginData({ ...loginData, password: e.target.value })}
+                required
+              />
+              <button type="submit" disabled={loading}>
+                {loading ? ⏳ : 'ログイン'}
+              </button>
+            </form>
+            <p className="auth-switch">
+              アカウントをお持ちでない方？
+              <button onClick={() => setCurrentPage('register')} className="link-button">登録</button>
+            </p>
+          </div>
+        </div>
+      );
+    }
+
+    // ホーム画面（未ログイン）
+    return (
+      <div className="app-container">
+        <header className="app-header">
+          <h1>🎁 おまかせ定期便</h1>
+          <p>あなたの好みを分析して、毎月おすすめをお届けします</p>
+        </header>
+
+        <ErrorAlert />
+
+        <main className="app-main">
+          <section className="features">
+            <div className="feature-card">
+               ☕ 
+              <h3>多様なカテゴリ</h3>
+              <p>コーヒー豆、靴下、スキンケア、紅茶、チョコレートから選択</p>
+            </div>
+            <div className="feature-card">
+               ⭐ 
+              <h3>AI診断クイズ</h3>
+              <p>あなたの好みを詳細に分析し、最適な商品をおすすめ</p>
+            </div>
+            <div className="feature-card">
+               📅 
+              <h3>定期配送</h3>
+              <p>月1回、2週間に1回、週1回から選べる配送頻度</p>
+            </div>
+            <div className="feature-card">
+               📦 
+              <h3>スケジュール管理</h3>
+              <p>次回配送日をいつでも確認・管理できます</p>
+            </div>
+          </section>
+
+          <div className="cta-buttons">
+            <button className="btn btn-primary" onClick={() => setCurrentPage('login')}>ログイン</button>
+            <button className="btn btn-secondary" onClick={() => setCurrentPage('register')}>新規登録</button>
+          </div>
+        </main>
+      </div>
+    );
+  }
+
+  // ============ ログイン後画面 ============
+  return (
+    <div className="app-container">
+      <header className="app-header dashboard">
+        <div className="header-top">
+          <h1>🎁 おまかせ定期便</h1>
+          <div className="header-nav">
+            <button onClick={() => setCurrentPage('home')} className={`nav-btn ${currentPage === 'home' ? 'active' : ''}`}>
+              🏠
+            </button>
+            <button onClick={() => setCurrentPage('subscriptions')} className={`nav-btn ${currentPage === 'subscriptions' ? 'active' : ''}`}>
+              📅
+            </button>
+            <button onClick={() => setCurrentPage('profile')} className={`nav-btn ${currentPage === 'profile' ? 'active' : ''}`}>
+              ⚙️
+            </button>
+            <button onClick={handleLogout} className="nav-btn logout">
+              🚪
+            </button>
+          </div>
+        </div>
+      </header>
+
+      <ErrorAlert />
+
+      <main className="app-main">
+        {/* ホームページ */}
+        {currentPage === 'home' && (
+          <div className="page-home">
+            <h2>ようこそ！{user?.email || 'ユーザー'}</h2>
+
+            {subscriptions.length === 0 ? (
+              <section className="empty-state">
+                📦
+                <h3>サブスクリプションがまだありません</h3>
+                <p>まずは診断クイズに参加して、あなたの好みを教えてください！</p>
+              </section>
+            ) : (
+              <section className="subscriptions-preview">
+                <h3>あなたのサブスクリプション</h3>
+                {subscriptions.map((sub) => (
+                  <div key={sub.id} className="subscription-card">
+                    <div className="card-header">
+                      <h4>{sub.category_name}</h4>
+                      <span className={`badge badge-${sub.plan}`}>{sub.plan}</span>
+                    </div>
+                    <p className="next-delivery">
+                      <Calendar size={18} />
+                      次回配送: {calculateNextDelivery(sub)}
+                    </p>
+                    <p className="delivery-date">{sub.next_delivery_date}</p>
+                  </div>
+                ))}
+              </section>
+            )}
+
+            <section className="categories-section">
+              <h3>カテゴリを選んで診断する</h3>
+              <div className="categories-grid">
+                {categories.map((cat) => {
+                  const isSubscribed = subscriptions.some(s => s.category_id === cat.id);
+                  return (
+                    <div
+                      key={cat.id}
+                      className={`category-card ${isSubscribed ? 'subscribed' : ''}`}
+                      onClick={() => {
+                        setSelectedCategory(cat.id);
+                        setCurrentQuestion(0);
+                        setQuizAnswers({});
+                        setDiagnosticResult(null);
+                        setCurrentPage('quiz');
+                      }}
+                    >
+                      <div className="cat-icon">{cat.icon === 'coffee' && '☕'}{cat.icon === 'socks' && '🧦'}{cat.icon === 'skincare' && '💄'}{cat.icon === 'tea' && '🍵'}{cat.icon === 'chocolate' && '🍫'}</div>
+                      <h4>{cat.name}</h4>
+                      <p>{cat.description}</p>
+                      {isSubscribed && <div className="subscribed-badge">> ✓/> 登録済み</div>}
+                      →
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+          </div>
+        )}
+
+        {/* 診断クイズページ */}
+        {currentPage === 'quiz' && selectedCategory && (
+          <div className="page-quiz">
+            <div className="quiz-header">
+              <h2>{categories.find(c => c.id === selectedCategory)?.name} 診断クイズ</h2>
+              <div className="progress-bar">
+                <div className="progress" style={{ width: `${((currentQuestion + 1) / getQuizByCategory(selectedCategory).length) * 100}%` }}></div>
+              </div>
+              <p className="progress-text">{currentQuestion + 1} / {getQuizByCategory(selectedCategory).length}</p>
+            </div>
+
+            {!diagnosticResult ? (
+              <div className="quiz-content">
+                <div className="question">
+                  <h3>{getQuizByCategory(selectedCategory)[currentQuestion].question}</h3>
+                  <div className="options">
+                    {getQuizByCategory(selectedCategory)[currentQuestion].options.map((option) => (
+                      <button
+                        key={option.value}
+                        className={`option-button ${quizAnswers[getQuizByCategory(selectedCategory)[currentQuestion].id] === option.value ? 'selected' : ''}`}
+                        onClick={() => handleAnswerQuestion(option.value)}
+                      >
+                        <div className="option-label">{option.label}</div>
+                        <div className="option-desc">{option.desc}</div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="quiz-result">
+                <div className="result-card">
+                  <h3>✨ 診断完了！</h3>
+                  <p className="result-score">あなたのマッチスコア: {diagnosticResult.score}%</p>
+
+                  <div className="preferences-summary">
+                    <h4>あなたの好み:</h4>
+                    <div className="prefs-list">
+                      {Object.entries(diagnosticResult.preferences).map(([key, value]) => (
+                        <div key={key} className="pref-item">
+                          <strong>{key}:</strong> {value}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {recommendations.length > 0 && (
+                    <div className="recommendations-preview">
+                      <h4>おすすめ商品トップ3</h4>
+                      {recommendations.slice(0, 3).map((rec) => (
+                        <div key={rec.id} className="rec-item">
+                          ⭐
+                          <span>{rec.product_name}</span>
+                          <span className="price">¥{rec.price?.toLocaleString()}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  <div className="result-actions">
+                    <h4>次のステップ</h4>
+                    <p>料金プランを選んでサブスクリプションを始めましょう！</p>
+
+                    <div className="plan-options">
+                      {[
+                        { id: 'basic', name: 'ベーシック', price: 1980, frequency: '月1回', desc: '毎月第1週' },
+                        { id: 'premium', name: 'プレミアム', price: 3480, frequency: '2週間に1回', desc: '隔週配送' },
+                        { id: 'deluxe', name: 'デラックス', price: 5980, frequency: '週1回', desc: '毎週配送' }
+                      ].map((plan) => (
+                        <div
+                          key={plan.id}
+                          className={`plan-card ${selectedPlan === plan.id ? 'selected' : ''}`}
+                          onClick={() => setSelectedPlan(plan.id)}
+                        >
+                          <h5>{plan.name}</h5>
+                          <div className="plan-price">¥{plan.price.toLocaleString()}</div>
+                          <div className="plan-freq">{plan.frequency}</div>
+                          <p className="plan-desc">{plan.desc}</p>
+                        </div>
+                      ))}
+                    </div>
+
+                    <button className="btn btn-primary btn-large" onClick={handleCreateSubscription}>
+                      {selectedPlan === 'basic' && '¥1,980で'}
+                      {selectedPlan === 'premium' && '¥3,480で'}
+                      {selectedPlan === 'deluxe' && '¥5,980で'}
+                      サブスクを始める
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <button className="btn btn-secondary" onClick={() => setCurrentPage('home')}>
+              ← 戻る
+            </button>
+          </div>
+        )}
+
+        {/* サブスクリプション管理ページ */}
+        {currentPage === 'subscriptions' && (
+          <div className="page-subscriptions">
+            <h2>📋 サブスクリプション管理</h2>
+
+            {subscriptions.length === 0 ? (
+              <div className="empty-state">
+                <Calendar size={60} />
+                <h3>サブスクリプションがありません</h3>
+                <button className="btn btn-primary" onClick={() => setCurrentPage('home')}>
+                  カテゴリを探す
+                </button>
+              </div>
+            ) : (
+              <div className="subscriptions-list">
+                {subscriptions.map((sub) => (
+                  <div key={sub.id} className="subscription-detail">
+                    <div className="sub-header">
+                      <div className="sub-info">
+                        <h3>{sub.category_name}</h3>
+                        <span className={`status-badge status-${sub.status}`}>{sub.status}</span>
+                      </div>
+                      <div className="plan-badge">{sub.plan}</div>
+                    </div>
+
+                    <div className="sub-details">
+                      <div className="detail-item">
+                        <strong>次回配送日:</strong>
+                        <span className="next-date">{new Date(sub.next_delivery_date).toLocaleDateString('ja-JP', { year: 'numeric', month: 'long', day: 'numeric' })}</span>
+                        <span className="days-until">({calculateNextDelivery(sub)})</span>
+                      </div>
+                      <div className="detail-item">
+                        <strong>配送間隔:</strong>
+                        <span>{sub.frequency}日ごと</span>
+                      </div>
+                      <div className="detail-item">
+                        <strong>登録日:</strong>
+                        <span>{new Date(sub.created_at).toLocaleDateString('ja-JP')}</span>
+                      </div>
+                    </div>
+
+                    <div className="sub-actions">
+                      <button className="btn btn-small">配送履歴を表示</button>
+                      <button className="btn btn-small btn-outline">詳細設定</button>
+                      {sub.status === 'active' && (
+                        <button className="btn btn-small btn-danger">一時停止</button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* プロフィールページ */}
+        {currentPage === 'profile' && (
+          <div className="page-profile">
+            <h2>⚙️ プロフィール設定</h2>
+            <div className="profile-card">
+              <div className="profile-info">
+                <p><strong>メール:</strong> {user?.email}</p>
+                <p><strong>会員ID:</strong> {user?.id}</p>
+              </div>
+              <button className="btn btn-danger" onClick={handleLogout}>
+                <LogOut size={18} /> ログアウト
+              </button>
+            </div>
+          </div>
+        )}
+      </main>
+    </div>
+  );
+};
+
+export default OmakaseApp;
